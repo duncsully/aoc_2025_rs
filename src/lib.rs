@@ -123,6 +123,67 @@ pub fn solver_02_2(input: &str) -> u64 {
     }
     total
 }
+
+/// I'm not sure how clever this approach is or not. Basically you know
+/// you want to find the highest number you can as far to the left as
+/// possible, and then from that index you find the next highest number.
+/// It's pretty straight forward from there.
+pub fn solver_03_1(input: &str) -> u32 {
+    let mut total = 0;
+    for line in input.lines() {
+        let mut first = 0;
+        let mut second = 0;
+        let mut index = line.len() - 2;
+        for n in (1..=9).rev() {
+            if let Some(i) = line.find(&n.to_string())
+                && i != line.len() - 1
+            {
+                index = i;
+                first = n;
+                break;
+            }
+        }
+        for n in (1..=9).rev() {
+            if line[index + 1..].find(&n.to_string()).is_some() {
+                second = n;
+                break;
+            }
+        }
+        total += first * 10 + second
+    }
+    total
+}
+
+/// It's amusing when the second part requires a more generic solution, thus
+/// resulting in a more elegant one. Essentially, you always need to "leave room"
+/// to find more numbers, so you have a sliding window in which to search for the
+/// largest number you can. After that, you move the window bounded on the left by
+/// the index of the previously found value and on the right still by having enough
+/// values left to find. If the amount you need is the remaining string, just take it.
+pub fn solver_03_2(input: &str) -> u64 {
+    let mut total = 0;
+    for line in input.lines() {
+        let mut on_values = String::new();
+        let mut next_start = 0;
+        for reserve in (1..=12).rev() {
+            // The remaining string is the number of values we still need, just
+            // take the rest
+            if reserve + next_start - 1 == line.len() {
+                on_values.push_str(&line[next_start..]);
+                break;
+            }
+            for n in (1..=9).rev() {
+                if let Some(i) = line[next_start..=line.len() - reserve].find(&n.to_string()) {
+                    next_start += i + 1;
+                    on_values.push_str(&n.to_string());
+                    break;
+                }
+            }
+        }
+        total += on_values.parse::<u64>().expect("Couldn't parse number");
+    }
+    total
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,5 +232,27 @@ L82";
         let input = "11-22,95-115,998-1012,1188511880-1188511890,222220-222224,1698522-1698528,446443-446449,38593856-38593862,565653-565659,824824821-824824827,2121212118-2121212124";
 
         assert_eq!(solver_02_2(input), 4174379265);
+    }
+
+    #[test]
+    fn solver_03_1_works() {
+        let input = "987654321111111
+811111111111119
+234234234234278
+818181911112111
+";
+
+        assert_eq!(solver_03_1(input), 357);
+    }
+
+    #[test]
+    fn solver_03_2_works() {
+        let input = "987654321111111
+811111111111119
+234234234234278
+818181911112111
+";
+
+        assert_eq!(solver_03_2(input), 3121910778619)
     }
 }
