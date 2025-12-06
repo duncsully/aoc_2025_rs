@@ -1,3 +1,5 @@
+use std::cmp::min;
+
 /// Day 1 is always a warm up. Everything should be fairly self-explanatory. The only note
 /// to make is that since a full rotation is 100 clicks, we can ignore everything past the
 /// tens digit and truncate the value. Whether this was better to do to the string before
@@ -184,6 +186,76 @@ pub fn solver_03_2(input: &str) -> u64 {
     }
     total
 }
+
+/// I'd like to say it was a straight forward mapping and iterating over a 2D vector
+/// but it ended up looking a little less elegant than I'd like.
+pub fn solver_04_1(input: &str) -> u32 {
+    let grid: Vec<Vec<u8>> = input
+        .lines()
+        .map(|line| line.chars().map(|char| (char == '@') as u8).collect())
+        .collect();
+    let mut total = 0;
+    for (y, row) in grid.iter().enumerate() {
+        for (x, &cell) in row.iter().enumerate() {
+            if cell == 0 {
+                continue;
+            }
+            let mut neighbors = 0;
+            for y_offset in y.saturating_sub(1)..=min(y + 1, grid.len() - 1) {
+                for x_offset in x.saturating_sub(1)..=min(x + 1, row.len() - 1) {
+                    if y != y_offset || x != x_offset {
+                        neighbors += grid[y_offset][x_offset];
+                    }
+                }
+            }
+            if neighbors < 4 {
+                total += 1
+            };
+        }
+    }
+    total
+}
+
+/// So the general concept is simple: keep doing what we did before, but set the removable
+/// cells to 0 between iterations. I got a little hung up on Rust's borrow checker, so a
+/// more optimal version would edit in place which could potentially remove more items per
+/// pass, but ah well this works well enough.
+pub fn solver_04_2(input: &str) -> u32 {
+    let mut grid: Vec<Vec<u8>> = input
+        .lines()
+        .map(|line| line.chars().map(|char| (char == '@') as u8).collect())
+        .collect();
+    let mut total = 0;
+    let mut done = false;
+    while !done {
+        done = true;
+        let mut to_remove = Vec::<(usize, usize)>::new();
+        for (y, row) in grid.iter().enumerate() {
+            for (x, cell) in row.iter().enumerate() {
+                if *cell == 0 {
+                    continue;
+                }
+                let mut neighbors = 0;
+                for y_offset in y.saturating_sub(1)..=min(y + 1, grid.len() - 1) {
+                    for x_offset in x.saturating_sub(1)..=min(x + 1, row.len() - 1) {
+                        if y != y_offset || x != x_offset {
+                            neighbors += grid[y_offset][x_offset];
+                        }
+                    }
+                }
+                if neighbors < 4 {
+                    total += 1;
+                    to_remove.push((y, x));
+                    done = false;
+                };
+            }
+        }
+        to_remove.iter().for_each(|(y, x)| grid[*y][*x] = 0);
+    }
+
+    total
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,5 +326,37 @@ L82";
 ";
 
         assert_eq!(solver_03_2(input), 3121910778619)
+    }
+
+    #[test]
+    fn solver_04_1_works() {
+        let input = "..@@.@@@@.
+@@@.@.@.@@
+@@@@@.@.@@
+@.@@@@..@.
+@@.@@@@.@@
+.@@@@@@@.@
+.@.@.@.@@@
+@.@@@.@@@@
+.@@@@@@@@.
+@.@.@@@.@.";
+
+        assert_eq!(solver_04_1(input), 13)
+    }
+
+    #[test]
+    fn solver_04_2_works() {
+        let input = "..@@.@@@@.
+@@@.@.@.@@
+@@@@@.@.@@
+@.@@@@..@.
+@@.@@@@.@@
+.@@@@@@@.@
+.@.@.@.@@@
+@.@@@.@@@@
+.@@@@@@@@.
+@.@.@@@.@.";
+
+        assert_eq!(solver_04_2(input), 43)
     }
 }
