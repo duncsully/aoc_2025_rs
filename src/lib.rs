@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 
 /// Day 1 is always a warm up. Everything should be fairly self-explanatory. The only note
 /// to make is that since a full rotation is 100 clicks, we can ignore everything past the
@@ -256,6 +256,98 @@ pub fn solver_04_2(input: &str) -> u32 {
     total
 }
 
+/// Another brute force approach. I thought about trying to consolidate
+/// the ranges and doing other clever stuff but...just bump to u64s and
+/// Rust cranks through it no problem. :shrug:
+pub fn solver_05_1(input: &str) -> u64 {
+    // Good ol' windows complicating things...
+    let double_newline = if input.contains("\r") {
+        "\r\n\r\n"
+    } else {
+        "\n\n"
+    };
+    let mut parts = input.split(double_newline);
+    let ranges: Vec<(u64, u64)> = parts
+        .next()
+        .expect("Input not properly split")
+        .lines()
+        .map(|line| {
+            let mut range = line.split('-');
+            (
+                range
+                    .next()
+                    .expect("No min value")
+                    .parse()
+                    .expect("Couldn't parse min"),
+                range
+                    .next()
+                    .expect("No max value")
+                    .parse()
+                    .expect("Couldn't parse max"),
+            )
+        })
+        .collect();
+    parts
+        .next()
+        .expect("Input not properly split")
+        .lines()
+        .fold(0, |total, id| {
+            let id = id.parse::<u64>().expect("Couldn't parse ID");
+            if ranges.iter().any(|(min, max)| *min <= id && id <= *max) {
+                total + 1
+            } else {
+                total
+            }
+        })
+}
+
+/// ...I guess I'm gonna consolidate the ranges. I mean, I was curious and lazy enough
+/// to see if I could just throw them all in a hash set. It took too long. Not gonna
+/// lie, this was the first one where I just kept running into case after case and it
+/// took me a while to finally nail this one down, but I'm happy with the result. It's
+/// not the prettiest solution, but it's still somewhat elegant IMO.
+pub fn solver_05_2(input: &str) -> u64 {
+    // Good ol' windows complicating things...
+    let double_newline = if input.contains("\r") {
+        "\r\n\r\n"
+    } else {
+        "\n\n"
+    };
+    let mut parts = input.split(double_newline);
+    parts
+        .next()
+        .expect("Input not properly split")
+        .lines()
+        .fold(Vec::<(u64, u64)>::new(), |mut acc, line| {
+            let mut range = line.split('-');
+            let mut start = range
+                .next()
+                .expect("No min value")
+                .parse::<u64>()
+                .expect("Couldn't parse min");
+            let mut end = range
+                .next()
+                .expect("No max value")
+                .parse::<u64>()
+                .expect("Couldn't parse max");
+
+            // Continuously consolidate ranges, since a newly added range can "bridge" two previously
+            // disconnected ranges.
+            while let Some(overlapping_range_i) = acc.iter().position(|(b_start, b_end)| {
+                (start <= *b_start && *b_start <= end) || (*b_start <= start && start <= *b_end)
+            }) {
+                let overlapping_range = acc.swap_remove(overlapping_range_i);
+                start = min(overlapping_range.0, start);
+                end = max(overlapping_range.1, end);
+            }
+            acc.push((start, end));
+            acc
+        })
+        .iter()
+        // Range is inclusive, so need to add one back in
+        .fold(0, |total, range| total + range.1 - range.0 + 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,5 +450,39 @@ L82";
 @.@.@@@.@.";
 
         assert_eq!(solver_04_2(input), 43)
+    }
+
+    #[test]
+    fn solver_05_1_works() {
+        let input = "3-5
+10-14
+16-20
+12-18
+
+1
+5
+8
+11
+17
+32";
+
+        assert_eq!(solver_05_1(input), 3)
+    }
+
+    #[test]
+    fn solver_05_2_works() {
+        let input = "3-5
+10-14
+16-20
+12-18
+
+1
+5
+8
+11
+17
+32";
+
+        assert_eq!(solver_05_2(input), 14)
     }
 }
