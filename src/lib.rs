@@ -348,6 +348,76 @@ pub fn solver_05_2(input: &str) -> u64 {
         .fold(0, |total, range| total + range.1 - range.0 + 1)
 }
 
+/// This one really felt like I could let Rust shine. Due to the nature of the problem of
+/// essentially just flipping the rows and columns, I could leverage Rust's iterator adapters
+/// to easily iterate over each column on an otherwise flat vector.
+pub fn solver_06_1(input: &str) -> u64 {
+    // Makes it easy to get the last line, and order doesn't matter for these operations anyway
+    let mut lines = input.lines().rev();
+    let operations = lines.next().expect("No input").split_whitespace();
+    let width = operations.clone().count();
+    // Flat 2D vector
+    let numbers: Vec<u64> = lines
+        .flat_map(|line| {
+            line.split_whitespace()
+                .map(|n| n.parse::<u64>().expect("Couldn't parse"))
+        })
+        .collect();
+    operations.enumerate().fold(0, |total, (i, operation)| {
+        let column = numbers.iter().skip(i).step_by(width);
+        total
+            + match operation {
+                "+" => column.sum(),
+                "*" => column.product(),
+                _ => 0,
+            }
+    })
+}
+
+/// Oof, this one also did me in for a little bit. The right-to-left detail wasn't
+/// important, but it was tricky to figure out the right logic to iterate essentially
+/// column by column. I feel I really forced fold to do a lot of heavy lifting maintaining
+/// several pieces of state.
+pub fn solver_06_2(input: &str) -> u64 {
+    let delimiter = if input.contains("\r") { "\r\n" } else { "\n" };
+    let (content, operations) = input.rsplit_once(delimiter).expect("Invalid input");
+    // The delimiter was removed from operations, but we're leaving it in content to avoid
+    // further unnecessary string processing.
+    let width = operations.len() + delimiter.len();
+    let operations = operations.char_indices();
+    operations
+        .fold(
+            (0, 0, '+'),
+            |(mut grand_total, mut current_total, mut last_op), (i, operator)| {
+                // Reading a new operator means we finished the previous operation
+                if operator == '+' || operator == '*' {
+                    last_op = operator;
+                    grand_total += current_total;
+                    current_total = if operator == '+' { 0 } else { 1 };
+                }
+                let number: String = content
+                    .chars()
+                    .skip(i)
+                    .step_by(width)
+                    .filter(|char| char.is_digit(10))
+                    .collect();
+                if let Ok(number) = u64::from_str_radix(&number, 10) {
+                    if last_op == '+' {
+                        current_total += number;
+                    } else {
+                        current_total *= number;
+                    }
+                }
+                // Need to manually add the last
+                if i == width - delimiter.len() - 1 {
+                    grand_total += current_total;
+                }
+                (grand_total, current_total, last_op)
+            },
+        )
+        .0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -484,5 +554,25 @@ L82";
 32";
 
         assert_eq!(solver_05_2(input), 14)
+    }
+
+    #[test]
+    fn solver_06_1_works() {
+        let input = "123 328  51 64 
+ 45 64  387 23 
+  6 98  215 314
+*   +   *   +";
+
+        assert_eq!(solver_06_1(input), 4277556)
+    }
+
+    #[test]
+    fn solver_06_2_works() {
+        let input = "123 328  51 64 
+ 45 64  387 23 
+  6 98  215 314
+*   +   *   +  ";
+
+        assert_eq!(solver_06_2(input), 3263827)
     }
 }
