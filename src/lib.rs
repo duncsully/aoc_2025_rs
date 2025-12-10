@@ -1,4 +1,7 @@
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::{HashMap, HashSet},
+};
 
 /// Day 1 is always a warm up. Everything should be fairly self-explanatory. The only note
 /// to make is that since a full rotation is 100 clicks, we can ignore everything past the
@@ -418,6 +421,60 @@ pub fn solver_06_2(input: &str) -> u64 {
         .0
 }
 
+/// Using sets trivializes this problem. There's not really much to
+/// say about this one, though that worries me about the second part.
+pub fn solver_07_1(input: &str) -> usize {
+    let mut beam_indices = HashSet::<usize>::new();
+    let mut splits = 0;
+    for line in input.lines() {
+        if let Some(i) = line.find('S') {
+            beam_indices.insert(i);
+        }
+        let current_indices = beam_indices.clone();
+        for i in current_indices {
+            if line.chars().nth(i) == Some('^') {
+                splits += 1;
+                beam_indices.remove(&i);
+                beam_indices.insert(i - 1);
+                beam_indices.insert(i + 1);
+            }
+        }
+    }
+    splits
+}
+
+/// Yep, dynamic programming was gonna come up eventually. Had to wrestle with Rust's
+/// borrow checking so the cache logic wasn't as clean as I'd like but it was still
+/// fairly straight forward regardless.
+pub fn solver_07_2(input: &str) -> u64 {
+    let mut cache = HashMap::<(usize, usize), u64>::new();
+
+    fn count_paths(
+        input: &str,
+        cache: &mut HashMap<(usize, usize), u64>,
+        row: usize,
+        col: usize,
+    ) -> u64 {
+        if cache.contains_key(&(row, col)) {
+            return *cache.get(&(row, col)).unwrap();
+        }
+
+        let result = if row >= input.lines().count() {
+            1
+        } else if let '^' = input.lines().nth(row).unwrap().chars().nth(col).unwrap() {
+            count_paths(input, cache, row + 1, col - 1)
+                + count_paths(input, cache, row + 1, col + 1)
+        } else {
+            count_paths(input, cache, row + 1, col)
+        };
+
+        cache.insert((row, col), result);
+        result
+    }
+
+    count_paths(input, &mut cache, 0, input.find('S').unwrap())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -574,5 +631,49 @@ L82";
 *   +   *   +  ";
 
         assert_eq!(solver_06_2(input), 3263827)
+    }
+
+    #[test]
+    fn solver_07_1_works() {
+        let input = ".......S.......
+...............
+.......^.......
+...............
+......^.^......
+...............
+.....^.^.^.....
+...............
+....^.^...^....
+...............
+...^.^...^.^...
+...............
+..^...^.....^..
+...............
+.^.^.^.^.^...^.
+...............";
+
+        assert_eq!(solver_07_1(input), 21);
+    }
+
+    #[test]
+    fn solver_07_2_works() {
+        let input = ".......S.......
+...............
+.......^.......
+...............
+......^.^......
+...............
+.....^.^.^.....
+...............
+....^.^...^....
+...............
+...^.^...^.^...
+...............
+..^...^.....^..
+...............
+.^.^.^.^.^...^.
+...............";
+
+        assert_eq!(solver_07_2(input), 40);
     }
 }
