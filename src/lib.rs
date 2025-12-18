@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     cmp::{max, min},
     collections::{HashMap, HashSet},
 };
@@ -473,6 +474,174 @@ pub fn solver_07_2(input: &str) -> u64 {
     }
 
     count_paths(input, &mut cache, 0, input.find('S').unwrap())
+}
+
+/// Ooooooof da. This took me a bit. I knew broadly the strategy I wanted to take but
+/// it involved a lot of wrestling with Rust's borrow checker. On the bright side I
+/// learned about some performance optimizations like select_nth_unstable. It got really
+/// hairy around the part of creating and maintaining the circuits and ultimately I
+/// resorted to RefCells to get it all working. It's not as clean as I'd like, but I
+/// think it's readable enough?
+pub fn solver_08_1(input: &str) -> u32 {
+    type Coord = [i32; 3];
+    let coords: Vec<Coord> = input
+        .lines()
+        .map(|line| {
+            let mut nums = line
+                .splitn(3, ',')
+                .map(|n| n.parse::<i32>().expect("Couldn't parse"));
+            [
+                nums.next().unwrap(),
+                nums.next().unwrap(),
+                nums.next().unwrap(),
+            ]
+        })
+        .collect();
+
+    // Each pair and their distance
+    type Pair<'a> = (&'a Coord, &'a Coord, f64);
+    let mut pairs: Vec<Pair> = coords
+        .iter()
+        .enumerate()
+        .flat_map(|(i, coord1)| {
+            coords.iter().skip(i + 1).map(move |coord2| {
+                let distance = f64::sqrt(
+                    coord1
+                        .iter()
+                        .enumerate()
+                        .map(|(i, a_coord)| f64::powi((*a_coord - coord2[i]) as f64, 2))
+                        .sum(),
+                );
+                return (coord1, coord2, distance);
+            })
+        })
+        .collect();
+
+    let sort_by_distance = |a: &Pair, b: &Pair| a.2.total_cmp(&b.2);
+
+    // We don't need these sorted, just the 1000 closest
+    let (closest, _, __) = pairs.select_nth_unstable_by(1000, sort_by_distance);
+
+    let mut circuits: Vec<RefCell<HashSet<&Coord>>> = Vec::new();
+    for (a, b, _) in closest {
+        let a_set = circuits.iter().find(|set| set.borrow().contains(a));
+        let b_set = circuits.iter().find(|set| set.borrow().contains(b));
+
+        match (a_set, b_set) {
+            (None, None) => {
+                circuits.push(RefCell::new(HashSet::from_iter([*a, *b])));
+            }
+            (Some(set), None) => {
+                set.borrow_mut().insert(b);
+            }
+            (None, Some(set)) => {
+                set.borrow_mut().insert(a);
+            }
+            (Some(set1), Some(set2)) => {
+                // Given a network like:
+                // A - B
+                // |
+                // C - D
+                // It's possible B and D are the next closest but already networked
+                if *set1.borrow() != *set2.borrow() {
+                    set1.borrow_mut().extend(set2.borrow_mut().drain());
+                }
+            }
+        };
+    }
+
+    // Likewise, these don't need to be sorted either, but we do want largest instead of smallest
+    let (largest, _, __) =
+        circuits.select_nth_unstable_by(3, |a, b| b.borrow().len().cmp(&a.borrow().len()));
+
+    largest
+        .iter()
+        .map(|set| set.borrow().len() as u32)
+        .product()
+}
+
+/// ...Alright, so in theory not terribly different, just need to keep joining until the only
+/// circuit contains everything. I'm gonna level with you, a better and more generalized solution
+/// would lazily grab more pairs as needed to avoid sorting the whole list of pairs, but I was
+/// feeling lazy and through a little experimentation landed on needing ~7000 pairs to get the
+/// answer.
+pub fn solver_08_2(input: &str) -> i64 {
+    type Coord = [i64; 3];
+    let coords: Vec<Coord> = input
+        .lines()
+        .map(|line| {
+            let mut nums = line
+                .splitn(3, ',')
+                .map(|n| n.parse::<i64>().expect("Couldn't parse"));
+            [
+                nums.next().unwrap(),
+                nums.next().unwrap(),
+                nums.next().unwrap(),
+            ]
+        })
+        .collect();
+
+    // Each pair and their distance
+    type Pair<'a> = (&'a Coord, &'a Coord, f64);
+    let mut pairs: Vec<Pair> = coords
+        .iter()
+        .enumerate()
+        .flat_map(|(i, coord1)| {
+            coords.iter().skip(i + 1).map(move |coord2| {
+                let distance = f64::sqrt(
+                    coord1
+                        .iter()
+                        .enumerate()
+                        .map(|(i, a_coord)| f64::powi((*a_coord - coord2[i]) as f64, 2))
+                        .sum(),
+                );
+                return (coord1, coord2, distance);
+            })
+        })
+        .collect();
+
+    let sort_by_distance = |a: &Pair, b: &Pair| a.2.total_cmp(&b.2);
+
+    let (closest, _, __) = pairs.select_nth_unstable_by(7000, sort_by_distance);
+
+    let mut circuits: Vec<RefCell<HashSet<&Coord>>> = Vec::new();
+    let mut result = 0;
+    for (a, b, _) in closest {
+        let a_set = circuits.iter().find(|set| set.borrow().contains(a));
+        let b_set = circuits.iter().find(|set| set.borrow().contains(b));
+
+        match (a_set, b_set) {
+            (None, None) => {
+                circuits.push(RefCell::new(HashSet::from_iter([*a, *b])));
+            }
+            (Some(set), None) => {
+                set.borrow_mut().insert(b);
+            }
+            (None, Some(set)) => {
+                set.borrow_mut().insert(a);
+            }
+            (Some(set1), Some(set2)) => {
+                // Given a network like:
+                // A - B
+                // |
+                // C - D
+                // It's possible B and D are the next closest but already networked
+                if *set1.borrow() != *set2.borrow() {
+                    set1.borrow_mut().extend(set2.borrow_mut().drain());
+                    circuits
+                        .swap_remove(circuits.iter().position(|circuit| circuit == set2).unwrap());
+                };
+            }
+        };
+        if circuits
+            .iter()
+            .any(|set| set.borrow().len() == coords.len())
+        {
+            result = a[0] * b[0];
+            break;
+        }
+    }
+    result
 }
 
 #[cfg(test)]
